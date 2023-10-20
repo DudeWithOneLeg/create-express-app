@@ -9,7 +9,7 @@ const directoryPath = "backend";
 
 // The command you want to execute
 const command =
-  "npm init -y && npm install cookie-parser cors csurf dotenv express express-async-errors helmet jsonwebtoken morgan per-env sequelize@6 sequelize-cli@6 pg && npm install -D sqlite3 dotenv-cli nodemon";
+  "npm init -y && npm install cookie-parser cors csurf dotenv express express-async-errors helmet jsonwebtoken morgan per-env sequelize@6 sequelize-cli@6 pg bcryptjs && npm install -D sqlite3 dotenv-cli nodemon";
 
 // Options for the child process
 const options = {
@@ -368,15 +368,26 @@ const csurf = require('csurf');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const routes = require('./routes');
+const { ValidationError } = require('sequelize');
 
 const { environment } = require('./config');
 const isProduction = environment === 'production';
 
 const app = express();
-
-app.use(routes);
-app.use(morgan('dev'));
 app.use(cookieParser());
+
+// Set the _csrf token and create req.csrfToken method
+app.use(
+  csurf({
+    cookie: {
+      secure: isProduction,
+      sameSite: isProduction && "Lax",
+      httpOnly: true
+    }
+  })
+);
+
+app.use(morgan('dev'));
 app.use(express.json());
 
 // Security Middleware
@@ -392,16 +403,39 @@ app.use(
   })
 );
 
-// Set the _csrf token and create req.csrfToken method
-app.use(
-  csurf({
-    cookie: {
-      secure: isProduction,
-      sameSite: isProduction && "Lax",
-      httpOnly: true
+app.use(routes);
+
+app.use((_req, _res, next) => {
+  const err = new Error("The requested resource couldn't be found.");
+  err.title = "Resource Not Found";
+  err.errors = { message: "The requested resource couldn't be found." };
+  err.status = 404;
+  next(err);
+});
+
+app.use((err, _req, _res, next) => {
+  // check if error is a Sequelize error:
+  if (err instanceof ValidationError) {
+    let errors = {};
+    for (let error of err.errors) {
+      errors[error.path] = error.message;
     }
-  })
-);
+    err.title = 'Validation error';
+    err.errors = errors;
+  }
+  next(err);
+});
+
+app.use((err, _req, res, _next) => {
+  res.status(err.status || 500);
+  console.error(err);
+  res.json({
+    title: err.title || 'Server Error',
+    message: err.message,
+    errors: err.errors,
+    stack: isProduction ? null : err.stack
+  });
+});
 
 module.exports = app;
       `,
@@ -432,6 +466,9 @@ module.exports = app;
       `
 const express = require('express')
 const router = express.Router()
+const apiRouter = require('./api');
+
+router.use('/api', apiRouter);
 
 router.get("/api/csrf/restore", (req, res) => {
   const csrfToken = req.csrfToken();
@@ -517,6 +554,10 @@ db.sequelize
       `
 const router = require('express').Router();
 
+router.post('/test', function(req, res) {
+  res.json({ requestBody: req.body });
+});
+
 module.exports = router;
 `,
       function (err) {
@@ -524,6 +565,224 @@ module.exports = router;
         console.log("Saved!");
       }
     );
+    runCommand("npx sequelize model:generate --name User --attributes username:string,email:string,hashedPassword:string", options, (error) => {
+      if (error) {
+        console.error("Failed to generate Users model.");
+        return;
+      }
+      const files = fs.readdirSync('./backend/db/migrations');
+      fs.writeFile(
+        `backend/db/migrations/${files[0]}`,
+        `
+"use strict";
+
+/** @type {import('sequelize-cli').Migration} */
+let options = {};
+if (process.env.NODE_ENV === 'production') {
+  options.schema = process.env.SCHEMA;  // define your schema in options object
+}
+
+module.exports = {
+  up: async (queryInterface, Sequelize) => {
+    return queryInterface.createTable("Users", {
+      id: {
+        allowNull: false,
+        autoIncrement: true,
+        primaryKey: true,
+        type: Sequelize.INTEGER
+      },
+      username: {
+        type: Sequelize.STRING(30),
+        allowNull: false,
+        unique: true
+      },
+      email: {
+        type: Sequelize.STRING(256),
+        allowNull: false,
+        unique: true
+      },
+      hashedPassword: {
+        type: Sequelize.STRING.BINARY,
+        allowNull: false
+      },
+      createdAt: {
+        allowNull: false,
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+      },
+      updatedAt: {
+        allowNull: false,
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+      }
+    }, options);
+  },
+  down: async (queryInterface, Sequelize) => {
+    options.tableName = "Users";
+    return queryInterface.dropTable(options);
+  }
+};
+  `,
+        function (err) {
+          if (err) throw err;
+          console.log("Saved!");
+        }
+      );
+      fs.writeFile(
+        `backend/db/models/user.js`,
+        `
+'use strict';
+const { Model, Validator } = require('sequelize');
+
+module.exports = (sequelize, DataTypes) => {
+  class User extends Model {
+    static associate(models) {
+      // define association here
+    }
+  };
+
+  User.init(
+    {
+      username: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+          len: [4, 30],
+          isNotEmail(value) {
+            if (Validator.isEmail(value)) {
+              throw new Error("Cannot be an email.");
+            }
+          }
+        }
+      },
+      email: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+          len: [3, 256],
+          isEmail: true
+        }
+      },
+      hashedPassword: {
+        type: DataTypes.STRING.BINARY,
+        allowNull: false,
+        validate: {
+          len: [60, 60]
+        }
+      }
+    }, {
+      sequelize,
+      modelName: 'User'
+    }
+  );
+  return User;
+};
+  `,
+        function (err) {
+          if (err) throw err;
+          console.log("Saved!");
+        }
+      );
+      runCommand("npx dotenv sequelize db:migrate", options, (error) => {
+        if (error) {
+          console.error("Failed to generate Users model.");
+          return;
+        }
+        // runCommand("npx dotenv sequelize db:seed:all", options, (error) => {
+        //   if (error) {
+        //     console.error("Failed to generate Users model.");
+        //     return;
+        //   }
+        // })
+        fs.mkdir("backend/utils", (err) => {
+          if (err) {
+            return console.error(err);
+          }
+          console.log("api folder created successfully!");
+        });
+        fs.writeFile(
+          `backend/utils/auth.js`,
+          `
+const jwt = require('jsonwebtoken');
+const { jwtConfig } = require('../config');
+const { User } = require('../db/models');
+
+const { secret, expiresIn } = jwtConfig;
+
+const setTokenCookie = (res, user) => {
+  // Create the token.
+  const safeUser = {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+  };
+  const token = jwt.sign(
+    { data: safeUser },
+    secret,
+    { expiresIn: parseInt(expiresIn) } // 604,800 seconds = 1 week
+  );
+
+  const isProduction = process.env.NODE_ENV === "production";
+
+  // Set the token cookie
+  res.cookie('token', token, {
+    maxAge: expiresIn * 1000, // maxAge in milliseconds
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction && "Lax"
+  });
+
+  return token;
+};
+
+const restoreUser = (req, res, next) => {
+  // token parsed from cookies
+  const { token } = req.cookies;
+  req.user = null;
+
+  return jwt.verify(token, secret, null, async (err, jwtPayload) => {
+    if (err) {
+      return next();
+    }
+
+    try {
+      const { id } = jwtPayload.data;
+      req.user = await User.findByPk(id, {
+        attributes: {
+          include: ['email', 'createdAt', 'updatedAt']
+        }
+      });
+    } catch (e) {
+      res.clearCookie('token');
+      return next();
+    }
+
+    if (!req.user) res.clearCookie('token');
+
+    return next();
+  });
+};
+
+// If there is no current user, return an error
+const requireAuth = function (req, _res, next) {
+  if (req.user) return next();
+
+  const err = new Error('Authentication required');
+  err.title = 'Authentication required';
+  err.errors = { message: 'Authentication required' };
+  err.status = 401;
+  return next(err);
+};
+
+module.exports = { setTokenCookie, restoreUser, requireAuth };
+    `,
+          function (err) {
+            if (err) throw err;
+            console.log("Saved!");
+          }
+        );
+      })
+    })
 
   });
 });
