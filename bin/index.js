@@ -1,4 +1,5 @@
 #! /usr/bin/env node
+const args = process.argv.slice(2);
 
 const fs = require("fs");
 const util = require("util");
@@ -9,7 +10,7 @@ const directoryPath = "backend";
 
 // The command you want to execute
 const command =
-  "npm init -y && npm install cookie-parser cors csurf dotenv express express-async-errors helmet jsonwebtoken morgan per-env sequelize@6 sequelize-cli@6 pg bcryptjs && npm install -D sqlite3 dotenv-cli nodemon";
+  "npm init -y && npm install cookie-parser cors csurf dotenv express express-async-errors helmet jsonwebtoken morgan per-env sequelize@6 sequelize-cli@6 pg bcryptjs express-validator && npm install -D sqlite3 dotenv-cli nodemon";
 
 // Options for the child process
 const options = {
@@ -28,6 +29,7 @@ build
   function (err) {
     if (err) throw err;
     console.log("Gitignore created successfully");
+    console.log('Installing dependencies...')
   }
 );
 
@@ -51,8 +53,8 @@ const runCommand = (command, options, callback) => {
       console.error(`Error: ${error}`);
       return callback(error);
     }
-    console.log("stdout:", stdout);
-    console.log("stderr:", stderr);
+    console.log(stdout ? stdout : "");
+    console.log(stderr ? stderr : "");
 
     callback(null);
   });
@@ -89,8 +91,8 @@ SCHEMA=«custom_schema_name_here»`,
       console.error(`Error: ${error}`);
       return;
     }
-    console.log("stdout:", stdout); // Output from the npm install command
-    console.log("stderr:", stderr); // Error messages, if any
+    console.log(stdout ? stdout : "");
+    console.log(stderr ? stderr : "");
   });
 
   fs.appendFile(
@@ -124,7 +126,7 @@ module.exports = {
 };`,
     function (err) {
       if (err) throw err;
-      console.log("Saved!");
+      console.log("Sequelizerc created...");
     }
   );
 
@@ -142,6 +144,7 @@ module.exports = {
     "start:development": "nodemon ./bin/www",
     "start:production": "node ./bin/www",
     "build": "node psql-setup-script.js"
+
   },
   "keywords": [],
   "author": "",
@@ -280,7 +283,7 @@ module.exports = {
   `,
     function (err) {
       if (err) throw err;
-      console.log("Saved!");
+      console.log("Scripts added to package.json...");
     }
   );
 
@@ -289,14 +292,14 @@ module.exports = {
       console.error(`Error: ${error}`);
       return;
     }
-    console.log("stdout: pwd", stdout); // Output from the npm install command
-    console.log("stderr:", stderr); // Error messages, if any
+    console.log(stdout ? "pwd" + stdout : "");
+    console.log(stderr ? stderr : "");
   });
 
   // Once `sequelize init` is complete, run `sequelize db:migrate` command
   runCommand("npx sequelize init", options, (error) => {
     if (error) {
-      console.error("Failed to run sequelize db:migrate command.");
+      console.error("Failed to run sequelize init command.");
       return;
     }
     fs.writeFile(
@@ -330,7 +333,7 @@ module.exports = {
       `,
       function (err) {
         if (err) throw err;
-        console.log("Saved!");
+        console.log("Initiating Sequelize...");
       }
     );
 
@@ -347,7 +350,7 @@ sequelize.showAllSchemas({ logging: false }).then(async (data) => {
 `,
       function (err) {
         if (err) throw err;
-        console.log("Saved!");
+        console.log("Writing Psql script...");
       }
     );
 
@@ -441,7 +444,8 @@ module.exports = app;
       `,
       function (err) {
         if (err) throw err;
-        console.log("Saved!");
+        console.log('Dev db migrated...')
+        console.log("Writing app...");
       }
     );
 
@@ -449,7 +453,7 @@ module.exports = app;
       if (err) {
         return console.error(err);
       }
-      console.log("Routes folder created successfully!");
+      console.log("Backend routes folder...");
     });
 
     exec("pwd", options, (error, stdout, stderr) => {
@@ -457,8 +461,8 @@ module.exports = app;
         console.error(`Error: ${error}`);
         return;
       }
-      console.log("stdout:", stdout); // Output from the npm install command
-      console.log("stderr:", stderr); // Error messages, if any
+      console.log(stdout ? "pwd" + stdout : "");
+    console.log(stderr ? stderr : "");
     });
 
     fs.writeFile(
@@ -481,7 +485,7 @@ router.get("/api/csrf/restore", (req, res) => {
 module.exports = router;`,
       function (err) {
         if (err) throw err;
-        console.log("Saved!");
+        console.log("Writing backend routes index...");
       }
     );
 
@@ -496,8 +500,8 @@ module.exports = router;`,
         console.error(`Error: ${error}`);
         return;
       }
-      console.log("stdout: pwd", stdout); // Output from the npm install command
-      console.log("stderr:", stderr); // Error messages, if any
+      console.log(stdout ? stdout : "");
+    console.log(stderr ? stderr : "");
     });
 
     fs.writeFile(
@@ -528,7 +532,7 @@ db.sequelize
   });`,
       function (err) {
         if (err) throw err;
-        console.log("Saved!");
+        console.log("Connecting db and server");
       }
     );
 
@@ -538,31 +542,46 @@ db.sequelize
       if (err) {
         return console.error(err);
       }
-      console.log("api folder created successfully!");
+      console.log("Api folder created successfully!");
     });
     exec("pwd", (error, stdout, stderr) => {
       if (error) {
         console.error(`Error: ${error}`);
         return;
       }
-      console.log("stdout: pwd", stdout); // Output from the npm install command
-      console.log("stderr:", stderr); // Error messages, if any
+      console.log(stdout ? stdout : "");
+    console.log(stderr ? stderr : "");
     });
 
     fs.writeFile(
       "backend/routes/api/index.js",
       `
 const router = require('express').Router();
+const sessionRouter = require('./session.js');
+const usersRouter = require('./users.js');
+const { setTokenCookie } = require('../../utils/auth.js');
+const { User } = require('../../db/models');
+const { restoreUser } = require('../../utils/auth.js');
+const { requireAuth } = require('../../utils/auth.js');
 
-router.post('/test', function(req, res) {
-  res.json({ requestBody: req.body });
-});
+router.use(restoreUser);
+
+router.use('/session', sessionRouter);
+
+router.use('/users', usersRouter);
+
+router.get(
+  '/restore-user',
+  (req, res) => {
+    return res.json(req.user);
+  }
+);
 
 module.exports = router;
 `,
       function (err) {
         if (err) throw err;
-        console.log("Saved!");
+        console.log("Writing api route.");
       }
     );
     runCommand("npx sequelize model:generate --name User --attributes username:string,email:string,hashedPassword:string", options, (error) => {
@@ -570,9 +589,9 @@ module.exports = router;
         console.error("Failed to generate Users model.");
         return;
       }
-      const files = fs.readdirSync('./backend/db/migrations');
+      const migrations = fs.readdirSync('./backend/db/migrations');
       fs.writeFile(
-        `backend/db/migrations/${files[0]}`,
+        `backend/db/migrations/${migrations[0]}`,
         `
 "use strict";
 
@@ -625,7 +644,7 @@ module.exports = {
   `,
         function (err) {
           if (err) throw err;
-          console.log("Saved!");
+          console.log("Migrating Users Table...");
         }
       );
       fs.writeFile(
@@ -680,12 +699,12 @@ module.exports = (sequelize, DataTypes) => {
   `,
         function (err) {
           if (err) throw err;
-          console.log("Saved!");
+          console.log("Writing Users model");
         }
       );
       runCommand("npx dotenv sequelize db:migrate", options, (error) => {
         if (error) {
-          console.error("Failed to generate Users model.");
+          console.error("Failed to migrate Users model.");
           return;
         }
         // runCommand("npx dotenv sequelize db:seed:all", options, (error) => {
@@ -698,89 +717,390 @@ module.exports = (sequelize, DataTypes) => {
           if (err) {
             return console.error(err);
           }
-          console.log("api folder created successfully!");
-        });
-        fs.writeFile(
-          `backend/utils/auth.js`,
-          `
-const jwt = require('jsonwebtoken');
-const { jwtConfig } = require('../config');
-const { User } = require('../db/models');
+          console.log("Utils folder created successfully!");
+          fs.writeFile(
+            `backend/utils/auth.js`,
+            `
+  const jwt = require('jsonwebtoken');
+  const { jwtConfig } = require('../config');
+  const { User } = require('../db/models');
 
-const { secret, expiresIn } = jwtConfig;
+  const { secret, expiresIn } = jwtConfig;
 
-const setTokenCookie = (res, user) => {
-  // Create the token.
-  const safeUser = {
-    id: user.id,
-    email: user.email,
-    username: user.username,
+  const setTokenCookie = (res, user) => {
+    // Create the token.
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+    };
+    const token = jwt.sign(
+      { data: safeUser },
+      secret,
+      { expiresIn: parseInt(expiresIn) } // 604,800 seconds = 1 week
+    );
+
+    const isProduction = process.env.NODE_ENV === "production";
+
+    // Set the token cookie
+    res.cookie('token', token, {
+      maxAge: expiresIn * 1000, // maxAge in milliseconds
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction && "Lax"
+    });
+
+    return token;
   };
-  const token = jwt.sign(
-    { data: safeUser },
-    secret,
-    { expiresIn: parseInt(expiresIn) } // 604,800 seconds = 1 week
-  );
 
-  const isProduction = process.env.NODE_ENV === "production";
+  const restoreUser = (req, res, next) => {
+    // token parsed from cookies
+    const { token } = req.cookies;
+    req.user = null;
 
-  // Set the token cookie
-  res.cookie('token', token, {
-    maxAge: expiresIn * 1000, // maxAge in milliseconds
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction && "Lax"
-  });
+    return jwt.verify(token, secret, null, async (err, jwtPayload) => {
+      if (err) {
+        return next();
+      }
 
-  return token;
-};
-
-const restoreUser = (req, res, next) => {
-  // token parsed from cookies
-  const { token } = req.cookies;
-  req.user = null;
-
-  return jwt.verify(token, secret, null, async (err, jwtPayload) => {
-    if (err) {
-      return next();
-    }
-
-    try {
-      const { id } = jwtPayload.data;
-      req.user = await User.findByPk(id, {
-        attributes: {
-          include: ['email', 'createdAt', 'updatedAt']
-        }
-      });
-    } catch (e) {
-      res.clearCookie('token');
-      return next();
-    }
-
-    if (!req.user) res.clearCookie('token');
-
-    return next();
-  });
-};
-
-// If there is no current user, return an error
-const requireAuth = function (req, _res, next) {
-  if (req.user) return next();
-
-  const err = new Error('Authentication required');
-  err.title = 'Authentication required';
-  err.errors = { message: 'Authentication required' };
-  err.status = 401;
-  return next(err);
-};
-
-module.exports = { setTokenCookie, restoreUser, requireAuth };
-    `,
-          function (err) {
-            if (err) throw err;
-            console.log("Saved!");
+      try {
+        const { id } = jwtPayload.data;
+        req.user = await User.findByPk(id, {
+          attributes: {
+            include: ['email', 'createdAt', 'updatedAt']
           }
-        );
+        });
+      } catch (e) {
+        res.clearCookie('token');
+        return next();
+      }
+
+      if (!req.user) res.clearCookie('token');
+
+      return next();
+    });
+  };
+
+  // If there is no current user, return an error
+  const requireAuth = function (req, _res, next) {
+    if (req.user) return next();
+
+    const err = new Error('Authentication required');
+    err.title = 'Authentication required';
+    err.errors = { message: 'Authentication required' };
+    err.status = 401;
+    return next(err);
+  };
+
+  module.exports = { setTokenCookie, restoreUser, requireAuth };
+      `,
+            function (err) {
+              if (err) throw err;
+              console.log("Writing utils/auth...");
+            }
+          );
+        });
+
+        runCommand("npx sequelize seed:generate --name demo-user", options, (error) => {
+          if (error) {
+            console.error("Failed to generate Users model.");
+            return;
+          }
+          const seeders = fs.readdirSync('./backend/db/seeders');
+          fs.writeFile(
+            `backend/db/seeders/${seeders[0]}`,
+            `
+'use strict';
+
+const { query } = require('express');
+const bcrypt = require('bcryptjs');
+
+/** @type {import('sequelize-cli').Migration} */
+
+let options = {};
+if (process.env.NODE_ENV === 'production') {
+  options.schema = process.env.SCHEMA; // define your schema in options object
+}
+options.tableName = 'Users'
+
+module.exports = {
+  async up(queryInterface, Sequelize) {
+    /**
+     * Add seed commands here.
+     *
+     * Example:
+     * await queryInterface.bulkInsert('People', [{
+     *   name: 'John Doe',
+     *   isBetaMember: false
+     * }], {});
+    */
+    const validUsers = [
+      {
+        email: 'demo@user.io',
+        username: 'Demo-lition',
+        hashedPassword: bcrypt.hashSync('password')
+      },
+
+    ]
+
+   await queryInterface.bulkInsert(options, validUsers, {})
+  },
+
+  async down(queryInterface, Sequelize) {
+    /**
+     * Add commands to revert seed here.
+     *
+     * Example:
+     * await queryInterface.bulkDelete('People', null, {});
+     */
+    await queryInterface.bulkDelete(options, {
+      id: [1]
+    }, {});
+  }
+};
+
+      `,
+            function (err) {
+              if (err) throw err;
+              console.log("Generated Users seeder...");
+            }
+          );
+          runCommand("npx dotenv sequelize db:seed:all", options, (error) => {
+            if (error) {
+              console.error("Failed to seed Users model.");
+              return;
+            }
+            fs.writeFile(
+              "backend/routes/api/users.js",
+              `
+const express = require('express');
+const bcrypt = require('bcryptjs');
+
+const { setTokenCookie, requireAuth } = require('../../utils/auth');
+const { User } = require('../../db/models');
+const { check } = require('express-validator');
+const { handleValidationErrors } = require('../../utils/validation');
+
+const validateSignup = [
+  check('email')
+    .exists({ checkFalsy: true })
+    .isEmail()
+    .withMessage('Please provide a valid email.'),
+  check('username')
+    .exists({ checkFalsy: true })
+    .isLength({ min: 4 })
+    .withMessage('Please provide a username with at least 4 characters.'),
+  check('username')
+    .not()
+    .isEmail()
+    .withMessage('Username cannot be an email.'),
+  check('password')
+    .exists({ checkFalsy: true })
+    .isLength({ min: 6 })
+    .withMessage('Password must be 6 characters or more.'),
+  handleValidationErrors
+];
+
+const router = express.Router();
+
+// Restore session user
+router.get(
+  '/',
+  (req, res) => {
+    const { user } = req;
+    if (user) {
+      const safeUser = {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+      };
+      return res.json({
+        user: safeUser
+      });
+    } else return res.json({ user: null });
+  }
+);
+
+// Sign up
+router.post(
+  '/',
+  validateSignup,
+  async (req, res) => {
+    const { email, password, username } = req.body;
+    const hashedPassword = bcrypt.hashSync(password);
+    const user = await User.create({ email, username, hashedPassword });
+
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+    };
+
+    await setTokenCookie(res, safeUser);
+
+    return res.json({
+      user: safeUser
+    });
+  }
+);
+
+module.exports = router;
+        `,
+              function (err) {
+                if (err) throw err;
+                console.log("Seeded Users table...");
+              }
+            );
+            fs.writeFile(
+              "backend/routes/api/session.js",
+              `
+const express = require('express');
+const { Op } = require('sequelize');
+const bcrypt = require('bcryptjs');
+
+const { check } = require('express-validator');
+const { handleValidationErrors } = require('../../utils/validation');
+const { setTokenCookie, restoreUser } = require('../../utils/auth');
+const { User } = require('../../db/models');
+
+const validateLogin = [
+  check('credential')
+    .exists({ checkFalsy: true })
+    .notEmpty()
+    .withMessage('Please provide a valid email or username.'),
+  check('password')
+    .exists({ checkFalsy: true })
+    .withMessage('Please provide a password.'),
+  handleValidationErrors
+];
+
+const router = express.Router();
+
+router.get(
+  '/',
+  (req, res) => {
+    const { user } = req;
+    if (user) {
+      const safeUser = {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+      };
+      return res.json({
+        user: safeUser
+      });
+    } else return res.json({ user: null });
+  }
+);
+
+router.post(
+  '/',
+  validateLogin,
+  async (req, res, next) => {
+    const { credential, password } = req.body;
+
+    const user = await User.findOne({
+      where: {
+        [Op.or]: {
+          username: credential,
+          email: credential
+        }
+      }
+    });
+
+    if (!user || !bcrypt.compareSync(password, user.hashedPassword.toString())) {
+      const err = new Error('Login failed');
+      err.status = 401;
+      err.title = 'Login failed';
+      err.errors = { credential: 'The provided credentials were invalid.' };
+      return next(err);
+    }
+
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+    };
+
+    await setTokenCookie(res, safeUser);
+
+    return res.json({
+      user: safeUser
+    });
+  }
+);
+
+router.delete(
+  '/',
+  (_req, res) => {
+    res.clearCookie('token');
+    return res.json({ message: 'success' });
+  }
+);
+
+module.exports = router;
+        `,
+              function (err) {
+                if (err) throw err;
+                console.log("Writing api/session...");
+              }
+            );
+            fs.writeFile('backend/utils/validation.js',
+            `
+const { validationResult } = require('express-validator');
+
+// middleware for formatting errors from express-validator middleware
+// (to customize, see express-validator's documentation)
+const handleValidationErrors = (req, _res, next) => {
+  const validationErrors = validationResult(req);
+
+  if (!validationErrors.isEmpty()) {
+    const errors = {};
+    validationErrors
+      .array()
+      .forEach(error => errors[error.param] = error.msg);
+
+    const err = Error("Bad request.");
+    err.errors = errors;
+    err.status = 400;
+    err.title = "Bad request.";
+    next(err);
+  }
+  next();
+};
+
+module.exports = {
+  handleValidationErrors
+};
+            `,
+            function (err) {
+              if (err) throw err;
+              console.log("Writing db validations...");
+            }
+            )
+            fs.writeFile('package.json',
+            `
+{
+  "name": "${dirname}",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
+            `
+            ,
+            function (err) {
+              if (err) throw err;
+              console.log("Writing db validations...");
+            }
+            )
+
+          })
+        })
       })
     })
 
