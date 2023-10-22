@@ -1,5 +1,6 @@
 #! /usr/bin/env node
 const args = process.argv.slice(2);
+const dir = args[0].split('/').join('/') + ("/" + args[1] || "/exprss-app/")
 
 const fs = require("fs");
 const util = require("util");
@@ -7,6 +8,7 @@ const exec = util.promisify(require("child_process").exec);
 
 // Specify the directory where you want to run the command
 const directoryPath = "backend";
+console.log((dir + "/" || "/") + "backend")
 
 // The command you want to execute
 const command =
@@ -48,16 +50,20 @@ fs.mkdir("backend", (err) => {
 });
 
 const runCommand = (command, options, callback) => {
-  exec(command, options, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error: ${error}`);
-      return callback(error);
-    }
-    console.log(stdout ? stdout : "");
-    console.log(stderr ? stderr : "");
+  if (command) {
 
-    callback(null);
-  });
+    return exec(command, options, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error: ${error}`);
+        return callback(error);
+      }
+      console.log(stdout ? stdout : "");
+      console.log(stderr ? stderr : "");
+
+      callback(null);
+    });
+  }
+  return
 };
 
 // Run `sequelize init` command
@@ -474,13 +480,34 @@ const apiRouter = require('./api');
 
 router.use('/api', apiRouter);
 
-router.get("/api/csrf/restore", (req, res) => {
-  const csrfToken = req.csrfToken();
-  res.cookie("XSRF-TOKEN", csrfToken);
-  res.status(200).json({
-    'XSRF-Token': csrfToken
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  // Serve the frontend's index.html file at the root route
+  router.get('/', (req, res) => {
+    res.cookie('XSRF-TOKEN', req.csrfToken());
+    return res.sendFile(
+      path.resolve(__dirname, '../../frontend', 'build', 'index.html')
+    );
   });
-});
+
+  // Serve the static assets in the frontend's build folder
+  router.use(express.static(path.resolve("../frontend/build")));
+
+  // Serve the frontend's index.html file at all other routes NOT starting with /api
+  router.get(/^(?!\\/?api).*/, (req, res) => {
+    res.cookie('XSRF-TOKEN', req.csrfToken());
+    return res.sendFile(
+      path.resolve(__dirname, '../../frontend', 'build', 'index.html')
+    );
+  });
+}
+
+if (process.env.NODE_ENV !== 'production') {
+  router.get('/api/csrf/restore', (req, res) => {
+    res.cookie('XSRF-TOKEN', req.csrfToken());
+    return res.json({});
+  });
+}
 
 module.exports = router;`,
       function (err) {
@@ -1078,26 +1105,838 @@ module.exports = {
               console.log("Writing db validations...");
             }
             )
-            fs.writeFile('package.json',
-            `
-{
-  "name": "${dirname}",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC"
-}
-            `
-            ,
-            function (err) {
-              if (err) throw err;
-              console.log("Writing db validations...");
+            let dir
+            exec("pwd", (error, stdout, stderr) => {
+              if (error) {
+                console.error(`Error: ${error}`);
+                return;
+              }
+              dir = stdout.split('/')
+              console.log(stdout ? stdout : "");
+              console.log(stderr ? stderr : "");
+              dir = dir[dir.length - 1].split('\n')[0]
+              fs.writeFile('package.json',
+              `
+  {
+    "name": "${dir}",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+      "render-postbuild": "npm run build --prefix frontend",
+      "install": "npm --prefix backend install backend && npm --prefix frontend install frontend",
+      "dev:backend": "npm install --prefix backend start",
+      "dev:frontend": "npm install --prefix frontend start",
+      "sequelize": "npm run --prefix backend sequelize",
+      "sequelize-cli": "npm run --prefix backend sequelize-cli",
+      "start": "npm start --prefix backend",
+      "build": "npm run build --prefix backend"
+    },
+    "author": "",
+    "license": "ISC"
+  }
+              `
+              ,
+              function (err) {
+                if (err) throw err;
+                console.log("Writing package.json in root");
+                console.log('Creating React app. This might take a couple of minutes.')
+              }
+              )
+              options.cwd = 'frontend'
+              runCommand("npx create-react-app . --template @appacademy/react-redux-v17 --use-npm && npm install js-cookie", options, (error) => {
+                if (error) {
+                  console.error("Failed to create React app.");
+                  return;
+                }
+
+                runCommand("pwd", (error) => {
+                  if (error) {
+                    console.error("Failed to create React app.");
+                    return;
+
+                  }
+
+                  fs.mkdir("frontend/src/components", (err) => {
+                    if (err) {
+                      return console.error(err);
+                    }
+                    console.log("frontend/src/components folder created successfully!");
+
+                  });
+
+
+                  fs.writeFile('frontend/package.json',
+                `
+  {
+    "name": "frontend",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+      "@testing-library/jest-dom": "^5.17.0",
+      "@testing-library/react": "^11.2.7",
+      "@testing-library/user-event": "^12.8.3",
+      "js-cookie": "^3.0.5",
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0",
+      "react-redux": "^7.2.9",
+      "react-router-dom": "^5.3.4",
+      "react-scripts": "5.0.1",
+      "redux": "^4.2.1",
+      "redux-thunk": "^2.4.2"
+    },
+    "scripts": {
+      "start": "react-scripts start",
+      "build": "react-scripts build",
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+    },
+    "eslintConfig": {
+      "extends": "react-app"
+    },
+    "browserslist": {
+      "production": [
+        ">0.2%",
+        "not dead",
+        "not op_mini all"
+      ],
+      "development": [
+        "last 1 chrome version",
+        "last 1 firefox version",
+        "last 1 safari version"
+      ]
+    },
+    "devDependencies": {
+      "redux-logger": "^3.0.6"
+    },
+    "proxy": "http://localhost:8000"
+  }
+                `
+                ,
+                function (err) {
+                  if (err) throw err;
+                  console.log("Adding proxy to frontend package.json");
+                })
+
+                fs.writeFile('frontend/src/store/csrf.js',
+                `
+  import Cookies from 'js-cookie';
+
+  export async function csrfFetch(url, options = {}) {
+    // set options.method to 'GET' if there is no method
+    options.method = options.method || 'GET';
+    // set options.headers to an empty object if there is no headers
+    options.headers = options.headers || {};
+
+    // if the options.method is not 'GET', then set the "Content-Type" header to
+      // "application/json", and set the "XSRF-TOKEN" header to the value of the
+      // "XSRF-TOKEN" cookie
+    if (options.method.toUpperCase() !== 'GET') {
+      options.headers['Content-Type'] =
+        options.headers['Content-Type'] || 'application/json';
+      options.headers['XSRF-Token'] = Cookies.get('XSRF-TOKEN');
+    }
+    // call the default window's fetch with the url and the options passed in
+    const res = await window.fetch(url, options);
+
+    // if the response status code is 400 or above, then throw an error with the
+      // error being the response
+    if (res.status >= 400) throw res;
+
+    // if the response status code is under 400, then return the response to the
+      // next promise chain
+    return res;
+  }
+
+  // call this to get the "XSRF-TOKEN" cookie, should only be used in development
+  export function restoreCSRF() {
+    return csrfFetch('/api/csrf/restore');
+  }
+                `
+                ,
+                function (err) {
+                  if (err) throw err;
+                  console.log("Writing frontend csrfFetch");
+                })
+
+                fs.writeFile('frontend/src/store/index.js',
+                `
+  import { createStore, combineReducers, applyMiddleware, compose } from "redux";
+  import thunk from "redux-thunk";
+  import sessionReducer from "./session";
+
+  const rootReducer = combineReducers({
+    session: sessionReducer,
+  });
+
+  let enhancer;
+
+  if (process.env.NODE_ENV === "production") {
+    enhancer = applyMiddleware(thunk);
+  } else {
+    const logger = require("redux-logger").default;
+    const composeEnhancers =
+      window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
+    enhancer = composeEnhancers(applyMiddleware(thunk, logger));
+  }
+
+  const configureStore = (preloadedState) => {
+    return createStore(rootReducer, preloadedState, enhancer);
+  };
+
+  export default configureStore;
+                `
+                ,
+                function (err) {
+                  if (err) throw err;
+                  console.log("Writing frontend csrfFetch");
+                })
+
+                fs.writeFile('frontend/src/index.js',
+                `
+  import React from 'react';
+  import ReactDOM from 'react-dom';
+  import { BrowserRouter } from 'react-router-dom';
+  import { Provider } from 'react-redux';
+  import './index.css';
+  import App from './App';
+  import configureStore from './store';
+  import { restoreCSRF, csrfFetch } from './store/csrf';
+  import ModalProvider from './context/Modal.js'
+
+  const store = configureStore();
+
+  if (process.env.NODE_ENV !== 'production') {
+    restoreCSRF();
+
+    window.csrfFetch = csrfFetch;
+    window.store = store;
+  }
+
+  function Root() {
+    return (
+      <ModalProvider>
+        <Provider store={store}>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </Provider>
+      </ModalProvider>
+    );
+  }
+
+  ReactDOM.render(
+    <React.StrictMode>
+      <Root />
+    </React.StrictMode>,
+    document.getElementById('root')
+  );
+                `
+                ,
+                function (err) {
+                  if (err) throw err;
+                  console.log("Writing frontend csrfFetch");
+                })
+
+                fs.writeFile('frontend/src/store/session.js',
+                `
+  import { csrfFetch } from "./csrf";
+
+  const SET_USER = "session/setUser";
+  const REMOVE_USER = "session/removeUser";
+
+  const setUser = (user) => {
+    return {
+      type: SET_USER,
+      payload: user,
+    };
+  };
+
+  const removeUser = () => {
+    return {
+      type: REMOVE_USER,
+    };
+  };
+
+  export const login = (user) => async (dispatch) => {
+    const { credential, password } = user;
+    const response = await csrfFetch("/api/session", {
+      method: "POST",
+      body: JSON.stringify({
+        credential,
+        password,
+      }),
+    });
+    const data = await response.json();
+    dispatch(setUser(data.user));
+    return response;
+  };
+
+  export const restoreUser = () => async (dispatch) => {
+    const response = await csrfFetch("/api/session");
+    const data = await response.json();
+    dispatch(setUser(data.user));
+    return response;
+  };
+
+  export const signup = (user) => async (dispatch) => {
+    const { username, firstName, lastName, email, password } = user;
+    const response = await csrfFetch("/api/users", {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        firstName,
+        lastName,
+        email,
+        password,
+      }),
+    });
+    const data = await response.json();
+    dispatch(setUser(data.user));
+    return response;
+  };
+
+  export const logout = () => async (dispatch) => {
+    const response = await csrfFetch('/api/session', {
+      method: 'DELETE',
+    });
+    dispatch(removeUser());
+    return response;
+  };
+
+  const initialState = { user: null };
+
+  const sessionReducer = (state = initialState, action) => {
+    let newState;
+    switch (action.type) {
+      case SET_USER:
+        newState = Object.assign({}, state);
+        newState.user = action.payload;
+        return newState;
+      case REMOVE_USER:
+        newState = Object.assign({}, state);
+        newState.user = null;
+        return newState;
+      default:
+        return state;
+    }
+  };
+
+  export default sessionReducer;
+                `
+                ,
+                function (err) {
+                  if (err) throw err;
+                  console.log("Writing session reducers");
+
+                  fs.mkdir("frontend/src/components/LoginFormPage", (err) => {
+                    if (err) {
+                      return console.error(err);
+                    }
+                    console.log("frontend/src/components/LoginFormPage folder created successfully!");
+                  });
+
+                  fs.mkdir("frontend/src/components/SignupFormPage", (err) => {
+                    if (err) {
+                      return console.error(err);
+                    }
+                    console.log("src/components/SignupFormPage folder created successfully!");
+                  });
+
+                  fs.mkdir("frontend/src/components/Navigation", (err) => {
+                    if (err) {
+                      return console.error(err);
+                    }
+                    console.log("frontend/src/components/Navigation folder created successfully!");
+                  });
+
+                  fs.mkdir("frontend/src/context", (err) => {
+                    if (err) {
+                      return console.error(err);
+                    }
+                    console.log("frontend/src/context folder created successfully!");
+                  });
+
+                  fs.mkdir("frontend/src/components/OpenModalButton", (err) => {
+                    if (err) {
+                      return console.error(err);
+                    }
+                    console.log("frontend/src/components/OpenModalButton folder created successfully!");
+                    fs.writeFile('frontend/src/components/SignupFormPage/index.js',
+                  `
+    import React, { useState } from "react";
+    import { useDispatch, useSelector } from "react-redux";
+    import { Redirect } from "react-router-dom";
+    import * as sessionActions from "../../store/session";
+    //import "./SignupForm.css";
+
+    function SignupFormPage() {
+      const dispatch = useDispatch();
+      const sessionUser = useSelector((state) => state.session.user);
+      const [email, setEmail] = useState("");
+      const [username, setUsername] = useState("");
+      const [firstName, setFirstName] = useState("");
+      const [lastName, setLastName] = useState("");
+      const [password, setPassword] = useState("");
+      const [confirmPassword, setConfirmPassword] = useState("");
+      const [errors, setErrors] = useState({});
+
+      if (sessionUser) return <Redirect to="/" />;
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (password === confirmPassword) {
+          setErrors({});
+          return dispatch(
+            sessionActions.signup({
+              email,
+              username,
+              firstName,
+              lastName,
+              password,
+            })
+          ).catch(async (res) => {
+            const data = await res.json();
+            if (data && data.errors) {
+              setErrors(data.errors);
             }
-            )
+          });
+        }
+        return setErrors({
+          confirmPassword: "Confirm Password field must be the same as the Password field"
+        });
+      };
+
+      return (
+        <>
+          <h1>Sign Up</h1>
+          <form onSubmit={handleSubmit}>
+            <label>
+              Email
+              <input
+                type="text"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </label>
+            {errors.email && <p>{errors.email}</p>}
+            <label>
+              Username
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </label>
+            {errors.username && <p>{errors.username}</p>}
+            <label>
+              First Name
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </label>
+            {errors.firstName && <p>{errors.firstName}</p>}
+            <label>
+              Last Name
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </label>
+            {errors.lastName && <p>{errors.lastName}</p>}
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </label>
+            {errors.password && <p>{errors.password}</p>}
+            <label>
+              Confirm Password
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </label>
+            {errors.confirmPassword && <p>{errors.confirmPassword}</p>}
+            <button type="submit">Sign Up</button>
+          </form>
+        </>
+      );
+    }
+
+    export default SignupFormPage;
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+
+                  fs.writeFile('frontend/src/components/Navigation/index.js',
+                  `
+    import React from 'react';
+    import { NavLink } from 'react-router-dom';
+    import { useSelector } from 'react-redux';
+    import ProfileButton from './ProfileButton';
+    //import './Navigation.css';
+
+    function Navigation({ isLoaded }){
+      const sessionUser = useSelector(state => state.session.user);
+
+      let sessionLinks;
+      if (sessionUser) {
+        sessionLinks = (
+          <li>
+            <ProfileButton user={sessionUser} />
+          </li>
+        );
+      } else {
+        sessionLinks = (
+          <li>
+            <NavLink to="/login">Log In</NavLink>
+            <NavLink to="/signup">Sign Up</NavLink>
+          </li>
+        );
+      }
+
+      return (
+        <ul>
+          <li>
+            <NavLink exact to="/">Home</NavLink>
+          </li>
+          {isLoaded && sessionLinks}
+        </ul>
+      );
+    }
+
+    export default Navigation;
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+
+                  fs.writeFile('frontend/src/components/Navigation/ProfileButton.js',
+                  `
+    import React, { useState, useEffect, useRef } from "react";
+    import { useDispatch } from 'react-redux';
+    import * as sessionActions from '../../store/session';
+
+    function ProfileButton({ user }) {
+      const dispatch = useDispatch();
+      const [showMenu, setShowMenu] = useState(false);
+      const ulRef = useRef();
+
+      const openMenu = () => {
+        if (showMenu) return;
+        setShowMenu(true);
+      };
+
+      useEffect(() => {
+        if (!showMenu) return;
+
+        const closeMenu = (e) => {
+          if (!ulRef.current.contains(e.target)) {
+            setShowMenu(false);
+          }
+        };
+
+        document.addEventListener('click', closeMenu);
+
+        return () => document.removeEventListener("click", closeMenu);
+      }, [showMenu]);
+
+      const logout = (e) => {
+        e.preventDefault();
+        dispatch(sessionActions.logout());
+      };
+
+      const ulClassName = "profile-dropdown" + (showMenu ? "" : " hidden");
+
+      return (
+        <>
+          <button onClick={openMenu}>
+            <i className="fas fa-user-circle" />
+          </button>
+          <ul className={ulClassName} ref={ulRef}>
+            <li>{user.username}</li>
+            <li>{user.firstName} {user.lastName}</li>
+            <li>{user.email}</li>
+            <li>
+              <button onClick={logout}>Log Out</button>
+            </li>
+          </ul>
+        </>
+      );
+    }
+
+    export default ProfileButton;
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+
+                  fs.writeFile('frontend/src/context/Modal.js',
+                  `
+    import React, { useRef, useState, useContext } from "react";
+    import ReactDOM from "react-dom";
+    import "./Modal.css";
+
+    const ModalContext = React.createContext();
+
+    export default function ModalProvider({ children }) {
+      const modalRef = useRef();
+      const [modalContent, setModalContent] = useState(null);
+      // callback function that will be called when modal is closing
+      const [onModalClose, setOnModalClose] = useState(null);
+
+      const closeModal = () => {
+        setModalContent(null); // clear the modal contents
+        // If callback function is truthy, call the callback function and reset it
+        // to null:
+        if (typeof onModalClose === "function") {
+          setOnModalClose(null);
+          onModalClose();
+        }
+      };
+
+      const contextValue = {
+        modalRef, // reference to modal div
+        modalContent, // React component to render inside modal
+        setModalContent, // function to set the React component to render inside modal
+        setOnModalClose, // function to set the callback function called when modal is closing
+        closeModal, // function to close the modal
+      };
+
+      return (
+        <>
+          <ModalContext.Provider value={contextValue}>
+            {children}
+          </ModalContext.Provider>
+          <div ref={modalRef} />
+        </>
+      );
+    }
+
+    export function Modal() {
+      const { modalRef, modalContent, closeModal } = useContext(ModalContext);
+      // If there is no div referenced by the modalRef or modalContent is not a
+      // truthy value, render nothing:
+      if (!modalRef || !modalRef.current || !modalContent) return null;
+
+      // Render the following component to the div referenced by the modalRef
+      return ReactDOM.createPortal(
+        <div id="modal">
+          <div id="modal-background" onClick={closeModal} />
+          <div id="modal-content">{modalContent}</div>
+        </div>,
+        modalRef.current
+      );
+    }
+
+    export const useModal = () => useContext(ModalContext);
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+
+                  fs.writeFile('frontend/src/context/Modal.css',
+                  `
+    #modal {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #modal-background {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+    }
+
+    #modal-content {
+      position: absolute;
+      background-color: white;
+    }
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+
+                  fs.writeFile('frontend/src/components/OpenModalButton/index.js',
+                  `
+    import React from "react";
+    import { useModal } from "../../context/Modal";
+
+    function OpenModalButton({
+      modalComponent, // component to render inside the modal
+      buttonText, // text of the button that opens the modal
+      onButtonClick, // optional: callback function that will be called once the button that opens the modal is clicked
+      onModalClose, // optional: callback function that will be called once the modal is closed
+    }) {
+      const { setModalContent, setOnModalClose } = useModal();
+
+      const onClick = () => {
+        if (typeof onButtonClick === "function") onButtonClick();
+        if (typeof onModalClose === "function") setOnModalClose(onModalClose);
+        setModalContent(modalComponent);
+      };
+
+      return <button onClick={onClick}>{buttonText}</button>;
+    }
+
+    export default OpenModalButton;
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+                  });
+
+                  fs.writeFile('frontend/src/components/LoginFormPage/index.js',
+                  `
+    import React, { useState } from "react";
+    import * as sessionActions from "../../store/session";
+    import { useDispatch, useSelector } from "react-redux";
+    import { Redirect } from "react-router-dom";
+    //import "./LoginForm.css";
+
+    function LoginFormPage() {
+      const dispatch = useDispatch();
+      const sessionUser = useSelector((state) => state.session.user);
+      const [credential, setCredential] = useState("");
+      const [password, setPassword] = useState("");
+      const [errors, setErrors] = useState({});
+
+      if (sessionUser) return <Redirect to="/" />;
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setErrors({});
+        return dispatch(sessionActions.login({ credential, password })).catch(
+          async (res) => {
+            const data = await res.json();
+            if (data && data.errors) setErrors(data.errors);
+          }
+        );
+      };
+
+      return (
+        <>
+          <h1>Log In</h1>
+          <form onSubmit={handleSubmit}>
+            <label>
+              Username or Email
+              <input
+                type="text"
+                value={credential}
+                onChange={(e) => setCredential(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </label>
+            {errors.credential && <p>{errors.credential}</p>}
+            <button type="submit">Log In</button>
+          </form>
+        </>
+      );
+    }
+
+    export default LoginFormPage;
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+
+                  fs.writeFile('frontend/src/App.js',
+                  `
+    import React, { useState, useEffect } from "react";
+    import { useDispatch } from "react-redux";
+    import { Route, Switch } from "react-router-dom";
+    import LoginFormPage from "./components/LoginFormPage";
+    import SignupFormPage from "./components/SignupFormPage";
+    import * as sessionActions from "./store/session";
+    import Navigation from "./components/Navigation";
+
+    function App() {
+      const dispatch = useDispatch();
+      const [isLoaded, setIsLoaded] = useState(false);
+      useEffect(() => {
+        dispatch(sessionActions.restoreUser()).then(() => setIsLoaded(true));
+      }, [dispatch]);
+
+      return (
+        <>
+          <Navigation isLoaded={isLoaded} />
+          {isLoaded && (
+            <Switch>
+              <Route path="/login">
+                <LoginFormPage />
+              </Route>
+              <Route path="/signup">
+                <SignupFormPage />
+              </Route>
+            </Switch>
+          )}
+        </>
+      );
+    }
+
+    export default App;
+                  `
+                  ,
+                  function (err) {
+                    if (err) throw err;
+                    console.log("Writing frontend csrfFetch");
+                  })
+
+
+                })
+
+                })
+
+
+              })
+            });
 
           })
         })
