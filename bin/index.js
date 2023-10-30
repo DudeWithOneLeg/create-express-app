@@ -1,6 +1,6 @@
 #! /usr/bin/env node
 const args = process.argv.slice(2);
-const dir = args[0].split('/').join('/') + ("/" + args[1] || "/exprss-app/")
+const dir = args.length ? args[0].split('/').join('/') + ("/" + args[1] || "/exprss-app/") : ""
 
 const fs = require("fs");
 const util = require("util");
@@ -1289,7 +1289,7 @@ module.exports = {
                 ,
                 function (err) {
                   if (err) throw err;
-                  console.log("Writing frontend csrfFetch");
+                  console.log("Configuring Redux store.");
                 })
 
                 fs.writeFile('frontend/src/index.js',
@@ -1335,7 +1335,7 @@ module.exports = {
                 ,
                 function (err) {
                   if (err) throw err;
-                  console.log("Writing frontend csrfFetch");
+                  console.log("Writing frontend index.");
                 })
 
                 fs.writeFile('frontend/src/store/session.js',
@@ -1582,7 +1582,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend signup form.");
                   })
 
                   fs.writeFile('frontend/src/components/Navigation/index.js',
@@ -1627,7 +1627,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend navigation bar.");
                   })
 
                   fs.writeFile('frontend/src/components/Navigation/ProfileButton.js',
@@ -1689,7 +1689,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend profile button.");
                   })
 
                   fs.writeFile('frontend/src/context/Modal.js',
@@ -1755,7 +1755,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend modal.");
                   })
 
                   fs.writeFile('frontend/src/context/Modal.css',
@@ -1788,7 +1788,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend modal css.");
                   })
 
                   fs.writeFile('frontend/src/components/OpenModalButton/index.js',
@@ -1818,7 +1818,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend modal button.");
                   })
                   });
 
@@ -1884,7 +1884,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend login form.");
                   })
 
                   fs.writeFile('frontend/src/App.js',
@@ -1926,7 +1926,7 @@ module.exports = {
                   ,
                   function (err) {
                     if (err) throw err;
-                    console.log("Writing frontend csrfFetch");
+                    console.log("Writing frontend App.js");
                   })
 
 
