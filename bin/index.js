@@ -1,7 +1,6 @@
 #! /usr/bin/env node
 const args = process.argv.slice(2);
 const dir = args.length ? args[0].split('/').join('/') + ("/" + args[1] || "/exprss-app/") : ""
-
 const fs = require("fs");
 const util = require("util");
 const exec = util.promisify(require("child_process").exec);
@@ -79,7 +78,8 @@ PORT=8000
 DB_FILE=db/dev.db
 JWT_SECRET=«generate_strong_secret_here»
 JWT_EXPIRES_IN=604800
-SCHEMA=«custom_schema_name_here»`,
+SCHEMA=«custom_schema_name_here»
+NODE_ENV=development`,
     function (err) {
       if (err) throw err;
       console.log("Saved!");
@@ -734,12 +734,6 @@ module.exports = (sequelize, DataTypes) => {
           console.error("Failed to migrate Users model.");
           return;
         }
-        // runCommand("npx dotenv sequelize db:seed:all", options, (error) => {
-        //   if (error) {
-        //     console.error("Failed to generate Users model.");
-        //     return;
-        //   }
-        // })
         fs.mkdir("backend/utils", (err) => {
           if (err) {
             return console.error(err);
@@ -827,7 +821,7 @@ module.exports = (sequelize, DataTypes) => {
             }
           );
         });
-
+        // generate demo user seed
         runCommand("npx sequelize seed:generate --name demo-user", options, (error) => {
           if (error) {
             console.error("Failed to generate Users model.");
@@ -892,11 +886,15 @@ module.exports = {
               console.log("Generated Users seeder...");
             }
           );
+
+          // run db seed command
           runCommand("npx dotenv sequelize db:seed:all", options, (error) => {
             if (error) {
               console.error("Failed to seed Users model.");
               return;
             }
+
+            // write users route
             fs.writeFile(
               "backend/routes/api/users.js",
               `
@@ -978,6 +976,8 @@ module.exports = router;
                 console.log("Seeded Users table...");
               }
             );
+
+            //write session route
             fs.writeFile(
               "backend/routes/api/session.js",
               `
@@ -1072,6 +1072,8 @@ module.exports = router;
                 console.log("Writing api/session...");
               }
             );
+
+            //write express validation errors
             fs.writeFile('backend/utils/validation.js',
             `
 const { validationResult } = require('express-validator');
@@ -1115,6 +1117,8 @@ module.exports = {
               console.log(stdout ? stdout : "");
               console.log(stderr ? stderr : "");
               dir = dir[dir.length - 1].split('\n')[0]
+
+              //add scripts to package.json
               fs.writeFile('package.json',
               `
   {
@@ -1144,6 +1148,8 @@ module.exports = {
               }
               )
               options.cwd = 'frontend'
+
+              //create react app
               runCommand("npx create-react-app . --template @appacademy/react-redux-v17 --use-npm && npm install js-cookie", options, (error) => {
                 if (error) {
                   console.error("Failed to create React app.");
@@ -1157,6 +1163,7 @@ module.exports = {
 
                   }
 
+                  //create react components
                   fs.mkdir("frontend/src/components", (err) => {
                     if (err) {
                       return console.error(err);
@@ -1218,6 +1225,7 @@ module.exports = {
                   console.log("Adding proxy to frontend package.json");
                 })
 
+                //add frontend proxy to backend API
                 fs.writeFile('frontend/src/store/csrf.js',
                 `
   import Cookies from 'js-cookie';
@@ -1259,6 +1267,7 @@ module.exports = {
                   console.log("Writing frontend csrfFetch");
                 })
 
+                //create redux root reducer
                 fs.writeFile('frontend/src/store/index.js',
                 `
   import { createStore, combineReducers, applyMiddleware, compose } from "redux";
@@ -1292,6 +1301,7 @@ module.exports = {
                   console.log("Configuring Redux store.");
                 })
 
+                // write react index
                 fs.writeFile('frontend/src/index.js',
                 `
   import React from 'react';
@@ -1338,6 +1348,7 @@ module.exports = {
                   console.log("Writing frontend index.");
                 })
 
+                // write redux session reducer
                 fs.writeFile('frontend/src/store/session.js',
                 `
   import { csrfFetch } from "./csrf";
@@ -1429,6 +1440,7 @@ module.exports = {
                   if (err) throw err;
                   console.log("Writing session reducers");
 
+                  // create frontend login/signup form components
                   fs.mkdir("frontend/src/components/LoginFormPage", (err) => {
                     if (err) {
                       return console.error(err);
